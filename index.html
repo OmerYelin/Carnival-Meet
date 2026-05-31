@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>תחנה חיה</title>
+  <title>קרנבל במרכזית</title>
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 
@@ -16,28 +16,26 @@
       direction: rtl;
     }
 
-    /* התחברות */
     #login {
       height: 100vh;
       display: flex;
       flex-direction: column;
       justify-content: center;
       align-items: center;
-      gap: 15px;
+      gap: 12px;
       text-align: center;
     }
 
     button {
       padding: 12px 20px;
-      border: none;
       border-radius: 12px;
-      font-size: 16px;
-      cursor: pointer;
+      border: none;
       background: #4285F4;
       color: white;
+      font-size: 16px;
+      cursor: pointer;
     }
 
-    /* מפה */
     #map {
       height: 100vh;
       width: 100vw;
@@ -48,10 +46,10 @@
 
 <body>
 
-<!-- 🔐 מסך התחברות -->
+<!-- 🔐 התחברות -->
 <div id="login">
-  <h1>🚉 תחנה חיה</h1>
-  <p>התחבר כדי להמשיך</p>
+  <h1>🎉 קרנבל במרכזית</h1>
+  <p>התחבר כדי לראות אנשים בתחנה</p>
   <button id="loginBtn">התחברות עם Google</button>
 </div>
 
@@ -61,17 +59,18 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
 import { getFirestore, doc, setDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
-
 import {
   getAuth,
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 
 import L from "https://unpkg.com/leaflet/dist/leaflet-src.esm.js";
 
-/* 🔥 Firebase שלך */
+/* 🔥 Firebase */
 const firebaseConfig = {
   apiKey: "AIzaSyC3ogweHbWqunD1Gb9z9-D708e06eTCCdQ",
   authDomain: "carnivalmeet.firebaseapp.com",
@@ -85,29 +84,35 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-let user = null;
 let map;
 let markers = {};
 
-/* 🟢 Google login */
+/* 🔐 Google login עם fallback */
 document.getElementById("loginBtn").onclick = async () => {
   const provider = new GoogleAuthProvider();
-  await signInWithPopup(auth, provider);
+
+  try {
+    await signInWithPopup(auth, provider);
+  } catch (e) {
+    console.log("Popup blocked → using redirect");
+    await signInWithRedirect(auth, provider);
+  }
 };
 
-/* 👤 זיהוי התחברות */
-onAuthStateChanged(auth, (u) => {
-  if (!u) return;
+/* 🔁 אחרי redirect */
+getRedirectResult(auth);
 
-  user = u;
+/* 👤 התחברות */
+onAuthStateChanged(auth, (user) => {
+  if (!user) return;
 
   document.getElementById("login").style.display = "none";
   document.getElementById("map").style.display = "block";
 
-  startApp();
+  start(user);
 });
 
-/* 🟩 פוליגון */
+/* 🟩 פוליגון תחנה */
 const polygon = [
   [31.2413911, 34.7992480],
   [31.2433259, 34.7985828],
@@ -125,7 +130,7 @@ const polygon = [
   [31.2452050, 34.8000526]
 ];
 
-/* 📍 בדיקה בתוך אזור */
+/* 📍 בדיקה */
 function inside(lat, lng, poly) {
   let inside = false;
 
@@ -143,8 +148,8 @@ function inside(lat, lng, poly) {
   return inside;
 }
 
-/* 🚀 הפעלת האפליקציה */
-function startApp() {
+/* 🚀 התחלה */
+function start(user) {
 
   map = L.map('map').setView([31.2428, 34.7975], 17);
 
@@ -154,12 +159,12 @@ function startApp() {
 
   L.polygon(polygon, { color: "#3b82f6" }).addTo(map);
 
-  watchLocation();
-  listenUsers();
+  watch(user);
+  listen();
 }
 
-/* 📡 GPS חי */
-function watchLocation() {
+/* 📡 GPS */
+function watch(user) {
   navigator.geolocation.watchPosition(async (pos) => {
 
     const lat = pos.coords.latitude;
@@ -168,7 +173,7 @@ function watchLocation() {
     const inZone = inside(lat, lng, polygon);
 
     await setDoc(doc(db, "users", user.uid), {
-      name: user.displayName,
+      name: user.displayName || "משתמש",
       lat,
       lng,
       inZone,
@@ -178,8 +183,8 @@ function watchLocation() {
   });
 }
 
-/* 👀 משתמשים */
-function listenUsers() {
+/* 👀 אחרים */
+function listen() {
 
   onSnapshot(collection(db, "users"), (snap) => {
 
@@ -196,7 +201,7 @@ function listenUsers() {
         markers[d.id].setLatLng([u.lat, u.lng]);
       }
 
-      markers[d.id].bindPopup(u.name || "משתמש");
+      markers[d.id].bindPopup(u.name);
     });
 
   });
