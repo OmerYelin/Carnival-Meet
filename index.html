@@ -1,25 +1,73 @@
 <!DOCTYPE html>
-<html>
+<html lang="he">
 <head>
-  <meta charset="utf-8" />
-  <title>Live Station Map</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Station Live</title>
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 
   <style>
-    body { margin: 0; }
-    #map { height: 100vh; width: 100vw; }
+    body {
+      margin: 0;
+      font-family: Arial;
+      background: #0b1220;
+      color: white;
+    }
+
+    /* LOGIN SCREEN */
+    #loginScreen {
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 10px;
+    }
+
+    input {
+      padding: 12px;
+      border-radius: 10px;
+      border: none;
+      width: 200px;
+      font-size: 16px;
+    }
+
+    button {
+      padding: 12px 20px;
+      border-radius: 10px;
+      border: none;
+      background: #3b82f6;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    /* MAP */
+    #map {
+      height: 100vh;
+      width: 100vw;
+      display: none;
+    }
   </style>
 </head>
 
 <body>
+
+<!-- 🔐 LOGIN -->
+<div id="loginScreen">
+  <h2>🚉 Station Live</h2>
+  <input id="nameInput" placeholder="השם שלך" />
+  <button onclick="start()">כניסה</button>
+</div>
+
+<!-- 🗺 MAP -->
 <div id="map"></div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
 import { getFirestore, doc, setDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
-
 import L from "https://unpkg.com/leaflet/dist/leaflet-src.esm.js";
 
 /* 🔥 Firebase */
@@ -37,13 +85,14 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 
 let userId = null;
+let userName = "";
 
-/* 🔐 login */
+/* 🔐 login firebase */
 signInAnonymously(auth).then(u => {
   userId = u.user.uid;
 });
 
-/* 🟩 הפוליגון שלך */
+/* 🟩 פוליגון תחנה */
 const polygon = [
   [31.2413911, 34.7992480],
   [31.2433259, 34.7985828],
@@ -61,7 +110,7 @@ const polygon = [
   [31.2452050, 34.8000526]
 ];
 
-/* 📍 בדיקה אם בתוך אזור */
+/* 📍 בדיקה */
 function inside(lat, lng, poly) {
   let inside = false;
 
@@ -79,50 +128,79 @@ function inside(lat, lng, poly) {
   return inside;
 }
 
+let map;
+let markers = {};
+
+/* 🚀 התחלה */
+window.start = function () {
+  const name = document.getElementById("nameInput").value;
+  if (!name) return;
+
+  userName = name;
+
+  document.getElementById("loginScreen").style.display = "none";
+  document.getElementById("map").style.display = "block";
+
+  initMap();
+};
+
 /* 🗺 מפה */
-const map = L.map('map').setView([31.2428, 34.7975], 17);
+function initMap() {
+  map = L.map('map').setView([31.2428, 34.7975], 17);
 
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 19
-}).addTo(map);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19
+  }).addTo(map);
 
-/* ציור הפוליגון */
-L.polygon(polygon, { color: "blue" }).addTo(map);
+  L.polygon(polygon, { color: "#3b82f6" }).addTo(map);
 
-/* נקודות */
-const markers = {};
+  watchLocation();
+  listenUsers();
+}
 
-/* 📡 GPS רציף */
-navigator.geolocation.watchPosition(async (pos) => {
-  if (!userId) return;
+/* 📡 GPS */
+function watchLocation() {
+  navigator.geolocation.watchPosition(async (pos) => {
+    if (!userId) return;
 
-  const lat = pos.coords.latitude;
-  const lng = pos.coords.longitude;
+    const lat = pos.coords.latitude;
+    const lng = pos.coords.longitude;
 
-  const inZone = inside(lat, lng, polygon);
+    const inZone = inside(lat, lng, polygon);
 
-  await setDoc(doc(db, "users", userId), {
-    lat,
-    lng,
-    inZone,
-    time: Date.now()
+    await setDoc(doc(db, "users", userId), {
+      name: userName,
+      lat,
+      lng,
+      inZone,
+      time: Date.now()
+    });
   });
-});
+}
 
-/* 👀 עדכון מפה בזמן אמת */
-onSnapshot(collection(db, "users"), (snap) => {
+/* 👀 אחרים */
+function listenUsers() {
+  onSnapshot(collection(db, "users"), (snap) => {
 
-  snap.forEach(d => {
-    const u = d.data();
+    snap.forEach(d => {
+      const u = d.data();
+      if (!u.lat) return;
 
-    if (!u.lat) return;
+      if (!markers[d.id]) {
+        markers[d.id] = L.circleMarker([u.lat, u.lng], {
+          radius: 8,
+          color: u.inZone ? "#22c55e" : "#ef4444"
+        }).addTo(map);
+      } else {
+        markers[d.id].setLatLng([u.lat, u.lng]);
+      }
 
-    if (!markers[d.id]) {
-      markers[d.id] = L.circleMarker([u.lat, u.lng], {
-        radius: 8
-      }).addTo(map);
-    } else {
-      markers[d.id].setLatLng([u.lat, u.lng]);
-    }
+      markers[d.id].bindPopup(u.name || "unknown");
+    });
 
-    markers
+  });
+}
+</script>
+
+</body>
+</html>
