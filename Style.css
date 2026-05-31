@@ -1,0 +1,31 @@
+body {
+  font-family: Arial;
+  background: #0f172a;
+  color: white;
+  margin: 0;
+  padding: 20px;
+}
+
+h1 {
+  text-align: center;
+}
+
+button {
+  padding: 12px;
+  font-size: 16px;
+  margin: 10px 0;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+}
+
+#users {
+  margin-top: 10px;
+}
+
+.card {
+  background: #1e293b;
+  padding: 10px;
+  margin: 8px 0;
+  border-radius: 10px;
+}
