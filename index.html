@@ -16,7 +16,7 @@
       direction: rtl;
     }
 
-    /* מסך התחברות */
+    /* login */
     #login {
       height: 100vh;
       display: flex;
@@ -41,7 +41,7 @@
       cursor: pointer;
     }
 
-    /* מפה */
+    /* map */
     #map {
       height: 100vh;
       width: 100vw;
@@ -55,7 +55,7 @@
 <!-- 🔐 LOGIN -->
 <div id="login">
   <h1>🎉 קרנבל במרכזית</h1>
-  <p>בחר את השם שלך</p>
+  <p>בחר שם כדי להיכנס</p>
 
   <select id="nameSelect">
     <option>אלה</option>
@@ -89,14 +89,13 @@
 <!-- 🗺 MAP -->
 <div id="map"></div>
 
+<!-- Leaflet (יציב, לא ESM) -->
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
 import { getFirestore, doc, setDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
-import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 
-import L from "https://unpkg.com/leaflet/dist/leaflet-src.esm.js";
-
-/* 🔥 Firebase */
 const firebaseConfig = {
   apiKey: "AIzaSyC3ogweHbWqunD1Gb9z9-D708e06eTCCdQ",
   authDomain: "carnivalmeet.firebaseapp.com",
@@ -108,18 +107,10 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
-const auth = getAuth(app);
-
-let userId = null;
-let userName = null;
 
 let map;
 let markers = {};
-
-/* 🔐 anonymous auth (רקע בלבד) */
-signInAnonymously(auth).then(u => {
-  userId = u.user.uid;
-});
+let userName = null;
 
 /* 🟩 פוליגון תחנה */
 const polygon = [
@@ -139,7 +130,7 @@ const polygon = [
   [31.2452050, 34.8000526]
 ];
 
-/* 📍 בדיקה אם בתוך אזור */
+/* 📍 בדיקה */
 function inside(lat, lng, poly) {
   let inside = false;
 
@@ -160,6 +151,8 @@ function inside(lat, lng, poly) {
 /* 🚀 התחלה */
 window.start = function () {
 
+  console.log("START CLICKED");
+
   userName = document.getElementById("nameSelect").value;
 
   document.getElementById("login").style.display = "none";
@@ -179,12 +172,12 @@ function initMap() {
 
   L.polygon(polygon, { color: "#3b82f6" }).addTo(map);
 
-  watchLocation();
-  listenUsers();
+  watch();
+  listen();
 }
 
-/* 📡 GPS חי */
-function watchLocation() {
+/* 📡 GPS */
+function watch() {
 
   navigator.geolocation.watchPosition(async (pos) => {
 
@@ -201,11 +194,13 @@ function watchLocation() {
       time: Date.now()
     });
 
+  }, (err) => {
+    alert("בעיה בגישה למיקום: " + err.message);
   });
 }
 
-/* 👀 משתמשים אחרים */
-function listenUsers() {
+/* 👀 אחרים */
+function listen() {
 
   onSnapshot(collection(db, "users"), (snap) => {
 
