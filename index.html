@@ -91,7 +91,7 @@
     <option>טפירו</option>
   </select>
 
-  <input id="adminPass" placeholder="סיסמת מנהל (לא חובה)" type="password"/>
+  <input id="adminPass" type="password" placeholder="סיסמת מנהל (1234)"/>
 
   <button onclick="start()">כניסה</button>
 </div>
@@ -99,9 +99,9 @@
 <!-- 🗺 MAP -->
 <div id="map"></div>
 
-<!-- 🧠 ADMIN PANEL -->
+<!-- 👑 ADMIN -->
 <div id="adminPanel">
-  <div>👑 מצב מנהל</div>
+  👑 מצב מנהל<br/>
   <button onclick="sendTest()">📢 שלח התראת ניסיון</button>
 </div>
 
@@ -111,6 +111,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
 import { getFirestore, doc, setDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
 
+/* 🔥 Firebase */
 const firebaseConfig = {
   apiKey: "AIzaSyC3ogweHbWqunD1Gb9z9-D708e06eTCCdQ",
   authDomain: "carnivalmeet.firebaseapp.com",
@@ -161,7 +162,13 @@ function inside(lat, lng, poly) {
   return inside;
 }
 
-/* 🔔 התראה */
+/* 🔔 התראות */
+async function enableNotifications() {
+  if (!("Notification" in window)) return false;
+  const p = await Notification.requestPermission();
+  return p === "granted";
+}
+
 function notify(msg) {
   if (Notification.permission === "granted") {
     new Notification(msg);
@@ -169,22 +176,17 @@ function notify(msg) {
 }
 
 /* 🚀 התחלה */
-window.start = function () {
+window.start = async function () {
 
   userName = document.getElementById("nameSelect").value;
 
   const pass = document.getElementById("adminPass").value;
-
-  if (pass === "1234") {
-    isAdmin = true;
-  }
+  isAdmin = (pass === "1234");
 
   document.getElementById("login").style.display = "none";
   document.getElementById("map").style.display = "block";
 
-  if (Notification.permission !== "granted") {
-    Notification.requestPermission();
-  }
+  await enableNotifications();
 
   if (isAdmin) {
     document.getElementById("adminPanel").style.display = "block";
@@ -226,13 +228,15 @@ function watch() {
       time: Date.now()
     });
 
+  }, (err) => {
+    alert("בעיה בגישה למיקום: " + err.message);
   });
 }
 
 /* 👀 משתמשים */
 function listen() {
 
-  let lastState = {};
+  let last = {};
 
   onSnapshot(collection(db, "users"), (snap) => {
 
@@ -240,18 +244,19 @@ function listen() {
       const u = d.data();
       if (!u.lat) return;
 
-      const wasInside = lastState[d.id];
-      const isInsideNow = u.inZone;
+      const was = last[d.id];
+      const now = u.inZone;
 
-      if (!wasInside && isInsideNow && d.id !== userName) {
-        notify(`${u.name} נכנס למרכזית 🎉`);
+      /* 🔔 התראה על כניסה */
+      if (!was && now && d.id !== userName) {
+        notify(`🚉 ${u.name} נכנס למרכזית`);
       }
 
-      lastState[d.id] = isInsideNow;
+      last[d.id] = now;
 
       if (!markers[d.id]) {
         markers[d.id] = L.circleMarker([u.lat, u.lng], {
-          radius: 8,
+          radius: isAdmin ? 10 : 8,
           color: u.inZone ? "#22c55e" : "#ef4444"
         }).addTo(map);
       } else {
@@ -259,18 +264,12 @@ function listen() {
       }
 
       markers[d.id].bindPopup(u.name);
-
-      /* 👑 ADMIN יכול לראות הכל יותר ברור */
-      if (isAdmin) {
-        markers[d.id].setRadius(10);
-        markers[d.id].setOpacity(1);
-      }
     });
 
   });
 }
 
-/* 📢 שליחת התראת ניסיון */
+/* 📢 התראת ניסיון מנהל */
 window.sendTest = function () {
   notify("📢 הודעת ניסיון מהמנהל");
 };
