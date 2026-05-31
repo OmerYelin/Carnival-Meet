@@ -1,9 +1,81 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Carnival Meet</title>
+  <meta charset="UTF-8" />
+  <title>Station App</title>
 </head>
+
 <body>
-    <h1>Hello World</h1>
+  <h1>📍 Station App</h1>
+
+  <button onclick="checkIn()">אני בתחנה</button>
+
+  <p id="status">לא מחובר</p>
+
+  <h3>אנשים בתחנה:</h3>
+  <div id="users"></div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
+    import { getFirestore, doc, setDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
+    import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
+
+    // 🔥 שלך
+    const firebaseConfig = {
+      apiKey: "AIzaSyC3ogweHbWqunD1Gb9z9-D708e06eTCCdQ",
+      authDomain: "carnivalmeet.firebaseapp.com",
+      projectId: "carnivalmeet",
+      storageBucket: "carnivalmeet.firebasestorage.app",
+      messagingSenderId: "503896953376",
+      appId: "1:503896953376:web:891ac2d42e9ab8c861e245",
+      measurementId: "G-RSKTVVQXXJ"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+
+    let userId = null;
+
+    // התחברות אנונימית
+    signInAnonymously(auth).then((user) => {
+      userId = user.user.uid;
+      document.getElementById("status").innerText = "מחובר ✔";
+    });
+
+    // כפתור "אני בתחנה"
+    window.checkIn = function () {
+      navigator.geolocation.getCurrentPosition(async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+
+        await setDoc(doc(db, "station_users", userId), {
+          lat,
+          lng,
+          time: Date.now()
+        });
+
+        document.getElementById("status").innerText = "נרשמת בתחנה ✔";
+      });
+    };
+
+    // הצגת משתמשים בזמן אמת
+    onSnapshot(collection(db, "station_users"), (snap) => {
+      const div = document.getElementById("users");
+      div.innerHTML = "";
+
+      snap.forEach((d) => {
+        const data = d.data();
+
+        const el = document.createElement("div");
+        el.innerText =
+          d.id.slice(0, 5) +
+          " | " +
+          new Date(data.time).toLocaleTimeString();
+
+        div.appendChild(el);
+      });
+    });
+  </script>
 </body>
 </html>
