@@ -1,25 +1,128 @@
 <!DOCTYPE html>
-<html lang="he">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Station App</title>
+  <meta charset="utf-8" />
+  <title>Live Station Map</title>
 
-  <link rel="stylesheet" href="style.css">
-  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+
+  <style>
+    body { margin: 0; }
+    #map { height: 100vh; width: 100vw; }
+  </style>
 </head>
 
 <body>
+<div id="map"></div>
 
-  <h1>📍 Station App</h1>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
+import { getFirestore, doc, setDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 
-  <p id="status">מחובר...</p>
+import L from "https://unpkg.com/leaflet/dist/leaflet-src.esm.js";
 
-  <button onclick="checkIn()">אני בתחנה</button>
+/* 🔥 Firebase */
+const firebaseConfig = {
+  apiKey: "AIzaSyC3ogweHbWqunD1Gb9z9-D708e06eTCCdQ",
+  authDomain: "carnivalmeet.firebaseapp.com",
+  projectId: "carnivalmeet",
+  storageBucket: "carnivalmeet.firebasestorage.app",
+  messagingSenderId: "503896953376",
+  appId: "1:503896953376:web:891ac2d42e9ab8c861e245"
+};
 
-  <h3>אנשים בתחנה:</h3>
-  <div id="users"></div>
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
 
-  <script type="module" src="app.js"></script>
-</body>
-</html>
+let userId = null;
+
+/* 🔐 login */
+signInAnonymously(auth).then(u => {
+  userId = u.user.uid;
+});
+
+/* 🟩 הפוליגון שלך */
+const polygon = [
+  [31.2413911, 34.7992480],
+  [31.2433259, 34.7985828],
+  [31.2438791, 34.7980219],
+  [31.2439708, 34.7965950],
+  [31.2443863, 34.7953412],
+  [31.2439187, 34.7942147],
+  [31.2435353, 34.7941736],
+  [31.2428338, 34.7950300],
+  [31.2420788, 34.7961120],
+  [31.2413082, 34.7970057],
+  [31.2405990, 34.7977098],
+  [31.2413509, 34.7992548],
+  [31.2442055, 34.8001707],
+  [31.2452050, 34.8000526]
+];
+
+/* 📍 בדיקה אם בתוך אזור */
+function inside(lat, lng, poly) {
+  let inside = false;
+
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const xi = poly[i][0], yi = poly[i][1];
+    const xj = poly[j][0], yj = poly[j][1];
+
+    const intersect =
+      ((yi > lat) !== (yj > lat)) &&
+      (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi);
+
+    if (intersect) inside = !inside;
+  }
+
+  return inside;
+}
+
+/* 🗺 מפה */
+const map = L.map('map').setView([31.2428, 34.7975], 17);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19
+}).addTo(map);
+
+/* ציור הפוליגון */
+L.polygon(polygon, { color: "blue" }).addTo(map);
+
+/* נקודות */
+const markers = {};
+
+/* 📡 GPS רציף */
+navigator.geolocation.watchPosition(async (pos) => {
+  if (!userId) return;
+
+  const lat = pos.coords.latitude;
+  const lng = pos.coords.longitude;
+
+  const inZone = inside(lat, lng, polygon);
+
+  await setDoc(doc(db, "users", userId), {
+    lat,
+    lng,
+    inZone,
+    time: Date.now()
+  });
+});
+
+/* 👀 עדכון מפה בזמן אמת */
+onSnapshot(collection(db, "users"), (snap) => {
+
+  snap.forEach(d => {
+    const u = d.data();
+
+    if (!u.lat) return;
+
+    if (!markers[d.id]) {
+      markers[d.id] = L.circleMarker([u.lat, u.lng], {
+        radius: 8
+      }).addTo(map);
+    } else {
+      markers[d.id].setLatLng([u.lat, u.lng]);
+    }
+
+    markers
