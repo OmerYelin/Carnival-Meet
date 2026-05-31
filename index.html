@@ -16,7 +16,6 @@
       direction: rtl;
     }
 
-    /* login */
     #login {
       height: 100vh;
       display: flex;
@@ -41,7 +40,6 @@
       cursor: pointer;
     }
 
-    /* map */
     #map {
       height: 100vh;
       width: 100vw;
@@ -55,7 +53,7 @@
 <!-- 🔐 LOGIN -->
 <div id="login">
   <h1>🎉 קרנבל במרכזית</h1>
-  <p>בחר שם כדי להיכנס</p>
+  <p>בחר שם</p>
 
   <select id="nameSelect">
     <option>אלה</option>
@@ -89,7 +87,6 @@
 <!-- 🗺 MAP -->
 <div id="map"></div>
 
-<!-- Leaflet (יציב, לא ESM) -->
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
 <script type="module">
@@ -112,22 +109,19 @@ let map;
 let markers = {};
 let userName = null;
 
-/* 🟩 פוליגון תחנה */
+/* 🟩 פוליגון תחנה (שלך) */
 const polygon = [
-  [31.2413911, 34.7992480],
-  [31.2433259, 34.7985828],
-  [31.2438791, 34.7980219],
-  [31.2439708, 34.7965950],
-  [31.2443863, 34.7953412],
-  [31.2439187, 34.7942147],
-  [31.2435353, 34.7941736],
-  [31.2428338, 34.7950300],
-  [31.2420788, 34.7961120],
-  [31.2413082, 34.7970057],
-  [31.2405990, 34.7977098],
-  [31.2413509, 34.7992548],
-  [31.2442055, 34.8001707],
-  [31.2452050, 34.8000526]
+  [31.24101633447053, 34.79980304467395],
+  [31.24333694479165, 34.79889870073973],
+  [31.243983557476653, 34.79856663565582],
+  [31.244019817609242, 34.79646120896297],
+  [31.244690606246635, 34.79515415406266],
+  [31.24384456893526, 34.793599807706016],
+  [31.242472765272595, 34.79500578465044],
+  [31.241143241942765, 34.79677208236822],
+  [31.24053998744013, 34.797203055695405],
+  [31.24046142487333, 34.798849246852285],
+  [31.24101633447053, 34.79980304467395]
 ];
 
 /* 📍 בדיקה */
@@ -148,15 +142,24 @@ function inside(lat, lng, poly) {
   return inside;
 }
 
+/* 🔔 התראה */
+function notify(msg) {
+  if (Notification.permission === "granted") {
+    new Notification(msg);
+  }
+}
+
 /* 🚀 התחלה */
 window.start = function () {
-
-  console.log("START CLICKED");
 
   userName = document.getElementById("nameSelect").value;
 
   document.getElementById("login").style.display = "none";
   document.getElementById("map").style.display = "block";
+
+  if (Notification.permission !== "granted") {
+    Notification.requestPermission();
+  }
 
   initMap();
 };
@@ -194,19 +197,29 @@ function watch() {
       time: Date.now()
     });
 
-  }, (err) => {
-    alert("בעיה בגישה למיקום: " + err.message);
   });
 }
 
-/* 👀 אחרים */
+/* 👀 משתמשים + התראה */
 function listen() {
+
+  let lastInside = {};
 
   onSnapshot(collection(db, "users"), (snap) => {
 
     snap.forEach(d => {
       const u = d.data();
       if (!u.lat) return;
+
+      const wasInside = lastInside[d.id];
+      const isInsideNow = u.inZone;
+
+      /* 🔔 התראה על כניסה */
+      if (!wasInside && isInsideNow && d.id !== userName) {
+        notify(`${u.name} נכנס למרכזית 🎉`);
+      }
+
+      lastInside[d.id] = isInsideNow;
 
       if (!markers[d.id]) {
         markers[d.id] = L.circleMarker([u.lat, u.lng], {
