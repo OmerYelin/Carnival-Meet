@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Station Live</title>
+  <title>תחנה חיה</title>
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 
@@ -13,37 +13,31 @@
       font-family: Arial;
       background: #0b1220;
       color: white;
+      direction: rtl;
     }
 
-    /* LOGIN SCREEN */
-    #loginScreen {
+    /* התחברות */
+    #login {
       height: 100vh;
       display: flex;
       flex-direction: column;
       justify-content: center;
       align-items: center;
-      gap: 10px;
-    }
-
-    input {
-      padding: 12px;
-      border-radius: 10px;
-      border: none;
-      width: 200px;
-      font-size: 16px;
+      gap: 15px;
+      text-align: center;
     }
 
     button {
       padding: 12px 20px;
-      border-radius: 10px;
       border: none;
-      background: #3b82f6;
-      color: white;
+      border-radius: 12px;
       font-size: 16px;
       cursor: pointer;
+      background: #4285F4;
+      color: white;
     }
 
-    /* MAP */
+    /* מפה */
     #map {
       height: 100vh;
       width: 100vw;
@@ -54,23 +48,30 @@
 
 <body>
 
-<!-- 🔐 LOGIN -->
-<div id="loginScreen">
-  <h2>🚉 Station Live</h2>
-  <input id="nameInput" placeholder="השם שלך" />
-  <button onclick="start()">כניסה</button>
+<!-- 🔐 מסך התחברות -->
+<div id="login">
+  <h1>🚉 תחנה חיה</h1>
+  <p>התחבר כדי להמשיך</p>
+  <button id="loginBtn">התחברות עם Google</button>
 </div>
 
-<!-- 🗺 MAP -->
+<!-- 🗺 מפה -->
 <div id="map"></div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
 import { getFirestore, doc, setDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
-import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
+
+import {
+  getAuth,
+  GoogleAuthProvider,
+  signInWithPopup,
+  onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
+
 import L from "https://unpkg.com/leaflet/dist/leaflet-src.esm.js";
 
-/* 🔥 Firebase */
+/* 🔥 Firebase שלך */
 const firebaseConfig = {
   apiKey: "AIzaSyC3ogweHbWqunD1Gb9z9-D708e06eTCCdQ",
   authDomain: "carnivalmeet.firebaseapp.com",
@@ -84,15 +85,29 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-let userId = null;
-let userName = "";
+let user = null;
+let map;
+let markers = {};
 
-/* 🔐 login firebase */
-signInAnonymously(auth).then(u => {
-  userId = u.user.uid;
+/* 🟢 Google login */
+document.getElementById("loginBtn").onclick = async () => {
+  const provider = new GoogleAuthProvider();
+  await signInWithPopup(auth, provider);
+};
+
+/* 👤 זיהוי התחברות */
+onAuthStateChanged(auth, (u) => {
+  if (!u) return;
+
+  user = u;
+
+  document.getElementById("login").style.display = "none";
+  document.getElementById("map").style.display = "block";
+
+  startApp();
 });
 
-/* 🟩 פוליגון תחנה */
+/* 🟩 פוליגון */
 const polygon = [
   [31.2413911, 34.7992480],
   [31.2433259, 34.7985828],
@@ -110,7 +125,7 @@ const polygon = [
   [31.2452050, 34.8000526]
 ];
 
-/* 📍 בדיקה */
+/* 📍 בדיקה בתוך אזור */
 function inside(lat, lng, poly) {
   let inside = false;
 
@@ -128,24 +143,9 @@ function inside(lat, lng, poly) {
   return inside;
 }
 
-let map;
-let markers = {};
+/* 🚀 הפעלת האפליקציה */
+function startApp() {
 
-/* 🚀 התחלה */
-window.start = function () {
-  const name = document.getElementById("nameInput").value;
-  if (!name) return;
-
-  userName = name;
-
-  document.getElementById("loginScreen").style.display = "none";
-  document.getElementById("map").style.display = "block";
-
-  initMap();
-};
-
-/* 🗺 מפה */
-function initMap() {
   map = L.map('map').setView([31.2428, 34.7975], 17);
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -158,28 +158,29 @@ function initMap() {
   listenUsers();
 }
 
-/* 📡 GPS */
+/* 📡 GPS חי */
 function watchLocation() {
   navigator.geolocation.watchPosition(async (pos) => {
-    if (!userId) return;
 
     const lat = pos.coords.latitude;
     const lng = pos.coords.longitude;
 
     const inZone = inside(lat, lng, polygon);
 
-    await setDoc(doc(db, "users", userId), {
-      name: userName,
+    await setDoc(doc(db, "users", user.uid), {
+      name: user.displayName,
       lat,
       lng,
       inZone,
       time: Date.now()
     });
+
   });
 }
 
-/* 👀 אחרים */
+/* 👀 משתמשים */
 function listenUsers() {
+
   onSnapshot(collection(db, "users"), (snap) => {
 
     snap.forEach(d => {
@@ -195,7 +196,7 @@ function listenUsers() {
         markers[d.id].setLatLng([u.lat, u.lng]);
       }
 
-      markers[d.id].bindPopup(u.name || "unknown");
+      markers[d.id].bindPopup(u.name || "משתמש");
     });
 
   });
