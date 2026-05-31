@@ -26,7 +26,7 @@
       text-align: center;
     }
 
-    select, button {
+    select, input, button {
       padding: 12px;
       border-radius: 12px;
       border: none;
@@ -45,6 +45,17 @@
       width: 100vw;
       display: none;
     }
+
+    #adminPanel {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      background: rgba(0,0,0,0.7);
+      padding: 10px;
+      border-radius: 10px;
+      display: none;
+      z-index: 999;
+    }
   </style>
 </head>
 
@@ -53,7 +64,6 @@
 <!-- 🔐 LOGIN -->
 <div id="login">
   <h1>🎉 קרנבל במרכזית</h1>
-  <p>בחר שם</p>
 
   <select id="nameSelect">
     <option>אלה</option>
@@ -81,11 +91,19 @@
     <option>טפירו</option>
   </select>
 
+  <input id="adminPass" placeholder="סיסמת מנהל (לא חובה)" type="password"/>
+
   <button onclick="start()">כניסה</button>
 </div>
 
 <!-- 🗺 MAP -->
 <div id="map"></div>
+
+<!-- 🧠 ADMIN PANEL -->
+<div id="adminPanel">
+  <div>👑 מצב מנהל</div>
+  <button onclick="sendTest()">📢 שלח התראת ניסיון</button>
+</div>
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
@@ -108,8 +126,9 @@ const db = getFirestore(app);
 let map;
 let markers = {};
 let userName = null;
+let isAdmin = false;
 
-/* 🟩 פוליגון תחנה (שלך) */
+/* 🟩 פוליגון */
 const polygon = [
   [31.24101633447053, 34.79980304467395],
   [31.24333694479165, 34.79889870073973],
@@ -154,11 +173,21 @@ window.start = function () {
 
   userName = document.getElementById("nameSelect").value;
 
+  const pass = document.getElementById("adminPass").value;
+
+  if (pass === "1234") {
+    isAdmin = true;
+  }
+
   document.getElementById("login").style.display = "none";
   document.getElementById("map").style.display = "block";
 
   if (Notification.permission !== "granted") {
     Notification.requestPermission();
+  }
+
+  if (isAdmin) {
+    document.getElementById("adminPanel").style.display = "block";
   }
 
   initMap();
@@ -200,10 +229,10 @@ function watch() {
   });
 }
 
-/* 👀 משתמשים + התראה */
+/* 👀 משתמשים */
 function listen() {
 
-  let lastInside = {};
+  let lastState = {};
 
   onSnapshot(collection(db, "users"), (snap) => {
 
@@ -211,15 +240,14 @@ function listen() {
       const u = d.data();
       if (!u.lat) return;
 
-      const wasInside = lastInside[d.id];
+      const wasInside = lastState[d.id];
       const isInsideNow = u.inZone;
 
-      /* 🔔 התראה על כניסה */
       if (!wasInside && isInsideNow && d.id !== userName) {
         notify(`${u.name} נכנס למרכזית 🎉`);
       }
 
-      lastInside[d.id] = isInsideNow;
+      lastState[d.id] = isInsideNow;
 
       if (!markers[d.id]) {
         markers[d.id] = L.circleMarker([u.lat, u.lng], {
@@ -231,10 +259,21 @@ function listen() {
       }
 
       markers[d.id].bindPopup(u.name);
+
+      /* 👑 ADMIN יכול לראות הכל יותר ברור */
+      if (isAdmin) {
+        markers[d.id].setRadius(10);
+        markers[d.id].setOpacity(1);
+      }
     });
 
   });
 }
+
+/* 📢 שליחת התראת ניסיון */
+window.sendTest = function () {
+  notify("📢 הודעת ניסיון מהמנהל");
+};
 </script>
 
 </body>
