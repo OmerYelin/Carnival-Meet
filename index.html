@@ -16,6 +16,7 @@
       direction: rtl;
     }
 
+    /* מסך התחברות */
     #login {
       height: 100vh;
       display: flex;
@@ -26,16 +27,21 @@
       text-align: center;
     }
 
-    button {
-      padding: 12px 20px;
+    select, button {
+      padding: 12px;
       border-radius: 12px;
       border: none;
-      background: #4285F4;
-      color: white;
       font-size: 16px;
+      width: 220px;
+    }
+
+    button {
+      background: #3b82f6;
+      color: white;
       cursor: pointer;
     }
 
+    /* מפה */
     #map {
       height: 100vh;
       width: 100vw;
@@ -46,27 +52,47 @@
 
 <body>
 
-<!-- 🔐 התחברות -->
+<!-- 🔐 LOGIN -->
 <div id="login">
   <h1>🎉 קרנבל במרכזית</h1>
-  <p>התחבר כדי לראות אנשים בתחנה</p>
-  <button id="loginBtn">התחברות עם Google</button>
+  <p>בחר את השם שלך</p>
+
+  <select id="nameSelect">
+    <option>אלה</option>
+    <option>גלי</option>
+    <option>גפן</option>
+    <option>דן</option>
+    <option>זיו</option>
+    <option>יעל בן לוי</option>
+    <option>יעל שגב</option>
+    <option>לוי</option>
+    <option>ליבי</option>
+    <option>מאיה</option>
+    <option>נטע</option>
+    <option>נוגה</option>
+    <option>עומר</option>
+    <option>עלמנש</option>
+    <option>פנטנש</option>
+    <option>צ'יקו</option>
+    <option>רון</option>
+    <option>רועי</option>
+    <option>שחר</option>
+    <option>שקד</option>
+    <option>שיר</option>
+    <option>שירה</option>
+    <option>טפירו</option>
+  </select>
+
+  <button onclick="start()">כניסה</button>
 </div>
 
-<!-- 🗺 מפה -->
+<!-- 🗺 MAP -->
 <div id="map"></div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
 import { getFirestore, doc, setDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
-import {
-  getAuth,
-  GoogleAuthProvider,
-  signInWithPopup,
-  signInWithRedirect,
-  getRedirectResult,
-  onAuthStateChanged
-} from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 
 import L from "https://unpkg.com/leaflet/dist/leaflet-src.esm.js";
 
@@ -84,32 +110,15 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
+let userId = null;
+let userName = null;
+
 let map;
 let markers = {};
 
-/* 🔐 Google login עם fallback */
-document.getElementById("loginBtn").onclick = async () => {
-  const provider = new GoogleAuthProvider();
-
-  try {
-    await signInWithPopup(auth, provider);
-  } catch (e) {
-    console.log("Popup blocked → using redirect");
-    await signInWithRedirect(auth, provider);
-  }
-};
-
-/* 🔁 אחרי redirect */
-getRedirectResult(auth);
-
-/* 👤 התחברות */
-onAuthStateChanged(auth, (user) => {
-  if (!user) return;
-
-  document.getElementById("login").style.display = "none";
-  document.getElementById("map").style.display = "block";
-
-  start(user);
+/* 🔐 anonymous auth (רקע בלבד) */
+signInAnonymously(auth).then(u => {
+  userId = u.user.uid;
 });
 
 /* 🟩 פוליגון תחנה */
@@ -130,7 +139,7 @@ const polygon = [
   [31.2452050, 34.8000526]
 ];
 
-/* 📍 בדיקה */
+/* 📍 בדיקה אם בתוך אזור */
 function inside(lat, lng, poly) {
   let inside = false;
 
@@ -149,7 +158,18 @@ function inside(lat, lng, poly) {
 }
 
 /* 🚀 התחלה */
-function start(user) {
+window.start = function () {
+
+  userName = document.getElementById("nameSelect").value;
+
+  document.getElementById("login").style.display = "none";
+  document.getElementById("map").style.display = "block";
+
+  initMap();
+};
+
+/* 🗺 מפה */
+function initMap() {
 
   map = L.map('map').setView([31.2428, 34.7975], 17);
 
@@ -159,12 +179,13 @@ function start(user) {
 
   L.polygon(polygon, { color: "#3b82f6" }).addTo(map);
 
-  watch(user);
-  listen();
+  watchLocation();
+  listenUsers();
 }
 
-/* 📡 GPS */
-function watch(user) {
+/* 📡 GPS חי */
+function watchLocation() {
+
   navigator.geolocation.watchPosition(async (pos) => {
 
     const lat = pos.coords.latitude;
@@ -172,8 +193,8 @@ function watch(user) {
 
     const inZone = inside(lat, lng, polygon);
 
-    await setDoc(doc(db, "users", user.uid), {
-      name: user.displayName || "משתמש",
+    await setDoc(doc(db, "users", userName), {
+      name: userName,
       lat,
       lng,
       inZone,
@@ -183,8 +204,8 @@ function watch(user) {
   });
 }
 
-/* 👀 אחרים */
-function listen() {
+/* 👀 משתמשים אחרים */
+function listenUsers() {
 
   onSnapshot(collection(db, "users"), (snap) => {
 
