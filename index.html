@@ -92,7 +92,6 @@
   </select>
 
   <input id="adminPass" type="password" placeholder="סיסמת מנהל (1234)"/>
-
   <button onclick="start()">כניסה</button>
 </div>
 
@@ -128,6 +127,7 @@ let map;
 let markers = {};
 let userName = null;
 let isAdmin = false;
+let notificationsEnabled = false;
 
 /* 🟩 פוליגון */
 const polygon = [
@@ -163,16 +163,20 @@ function inside(lat, lng, poly) {
 }
 
 /* 🔔 התראות */
-async function enableNotifications() {
-  if (!("Notification" in window)) return false;
-  const p = await Notification.requestPermission();
-  return p === "granted";
+async function requestNotifications() {
+  if (!("Notification" in window)) return;
+
+  try {
+    const res = await Notification.requestPermission();
+    notificationsEnabled = res === "granted";
+  } catch (e) {
+    console.log("notification error", e);
+  }
 }
 
 function notify(msg) {
-  if (Notification.permission === "granted") {
-    new Notification(msg);
-  }
+  if (Notification.permission !== "granted") return;
+  new Notification(msg);
 }
 
 /* 🚀 התחלה */
@@ -186,7 +190,15 @@ window.start = async function () {
   document.getElementById("login").style.display = "none";
   document.getElementById("map").style.display = "block";
 
-  await enableNotifications();
+  // 🔔 בקשת הרשאה מיד
+  await requestNotifications();
+
+  // fallback אם נחסם
+  if (!notificationsEnabled) {
+    console.log("retry notification on gesture...");
+    const res = await Notification.requestPermission();
+    notificationsEnabled = res === "granted";
+  }
 
   if (isAdmin) {
     document.getElementById("adminPanel").style.display = "block";
@@ -229,7 +241,7 @@ function watch() {
     });
 
   }, (err) => {
-    alert("בעיה בגישה למיקום: " + err.message);
+    alert("בעיה במיקום: " + err.message);
   });
 }
 
@@ -247,7 +259,6 @@ function listen() {
       const was = last[d.id];
       const now = u.inZone;
 
-      /* 🔔 התראה על כניסה */
       if (!was && now && d.id !== userName) {
         notify(`🚉 ${u.name} נכנס למרכזית`);
       }
@@ -256,7 +267,7 @@ function listen() {
 
       if (!markers[d.id]) {
         markers[d.id] = L.circleMarker([u.lat, u.lng], {
-          radius: isAdmin ? 10 : 8,
+          radius: 8,
           color: u.inZone ? "#22c55e" : "#ef4444"
         }).addTo(map);
       } else {
@@ -269,7 +280,7 @@ function listen() {
   });
 }
 
-/* 📢 התראת ניסיון מנהל */
+/* 📢 בדיקה מנהל */
 window.sendTest = function () {
   notify("📢 הודעת ניסיון מהמנהל");
 };
